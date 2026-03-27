@@ -1,0 +1,228 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "json"
+require "time"
+
+require_relative "../lib/progress🦫bar🦫none"
+
+OUTPUT_DIR = File.expand_path("../docs/images", __dir__)
+WORK_DIR = File.expand_path("../tmp/demo_assets", __dir__)
+PYTHON_RENDERER = File.expand_path("render_demo_assets.py", __dir__)
+FONT_PATH = "/System/Library/Fonts/SFNSMono.ttf"
+DEFAULT_TEXT_RGB = [231, 235, 243].freeze
+
+Segment = Struct.new(:text, :rgb, :bold, :dim, keyword_init: true)
+
+def parse_ansi(text)
+  state = { rgb: DEFAULT_TEXT_RGB, bold: false, dim: false }
+  segments = []
+  buffer = +""
+  i = 0
+
+  flush = lambda do
+    next if buffer.empty?
+
+    segments << Segment.new(text: buffer.dup, rgb: state[:rgb].dup, bold: state[:bold], dim: state[:dim])
+    buffer.clear
+  end
+
+  while i < text.length
+    if text[i] == "\e" && text[i + 1] == "["
+      flush.call
+      terminator = text.index("m", i)
+      break unless terminator
+
+      codes = text[(i + 2)...terminator].split(";").reject(&:empty?).map(&:to_i)
+      codes = [0] if codes.empty?
+      state = apply_sgr_codes(state, codes)
+      i = terminator + 1
+      next
+    end
+
+    buffer << text[i]
+    i += 1
+  end
+
+  flush.call
+  segments
+end
+
+def apply_sgr_codes(state, codes)
+  updated = state.dup
+  j = 0
+
+  while j < codes.length
+    code = codes[j]
+    case code
+    when 0
+      updated = { rgb: DEFAULT_TEXT_RGB, bold: false, dim: false }
+    when 1
+      updated[:bold] = true
+    when 2
+      updated[:dim] = true
+    when 22
+      updated[:bold] = false
+      updated[:dim] = false
+    when 39
+      updated[:rgb] = DEFAULT_TEXT_RGB
+    when 38
+      if codes[j + 1] == 2 && codes[j + 4]
+        updated[:rgb] = codes[(j + 2)..(j + 4)]
+        j += 4
+      end
+    end
+    j += 1
+  end
+
+  updated
+end
+
+def run!(*command)
+  success = system(*command)
+  return if success
+
+  raise "Command failed: #{command.join(' ')}"
+end
+
+def renderer_lines(config, frame_index)
+  renderer = ProgressBarNone::Renderer.new(**config[:renderer])
+  renderer.instance_variable_set(:@start_time, Time.now - frame_index * config[:seconds_per_frame])
+
+  metrics = config[:metrics_builder]&.call(frame_index)
+  progress = frame_index.fdiv(config[:frame_count] - 1)
+  total = config[:total]
+  current = (progress * total).round
+  elapsed = config[:elapsed_base] + frame_index * config[:seconds_per_frame]
+  rate = current.zero? ? 0.0 : current / elapsed
+  eta = progress.zero? ? Float::INFINITY : (total - current) / [rate, 0.001].max
+
+  srand(config[:seed] + frame_index)
+  lines = renderer.render(
+    progress: progress,
+    current: current,
+    total: total,
+    elapsed: elapsed,
+    eta: eta,
+    rate: rate,
+    metrics: metrics,
+    finished: progress >= 1.0,
+  )
+
+  title = "#{ProgressBarNone::ANSI::BOLD}#{ProgressBarNone::ANSI.palette_color(config[:renderer][:palette], 0.55)}#{config[:title]}#{ProgressBarNone::ANSI::RESET}"
+  [title, *lines]
+end
+
+def build_metrics(frame_index, kind)
+  metrics = ProgressBarNone::Metrics.new
+  samples = frame_index + 2
+
+  samples.times do |i|
+    phase = i.fdiv([samples - 1, 1].max)
+    case kind
+    when :deploy
+      metrics.record(
+        latency_ms: 40 + 10 * Math.sin(phase * Math::PI * 3) + (i % 4),
+        throughput: 900 + 180 * Math.cos(phase * Math::PI * 2) + i * 18
+      )
+    when :benchmark
+      metrics.record(
+        ops_per_sec: 1_200 + 220 * Math.sin(phase * Math::PI * 2.5) + i * 9,
+        rss_mb: 42 + 4.5 * Math.cos(phase * Math::PI * 2)
+      )
+    end
+  end
+
+  metrics
+end
+
+def serializable_lines(lines)
+  lines.map do |line|
+    parse_ansi(line).map do |segment|
+      {
+        text: segment.text,
+        rgb: segment.rgb,
+        bold: segment.bold,
+        dim: segment.dim,
+      }
+    end
+  end
+end
+
+def generate_demo(config)
+  frame_dir = File.join(WORK_DIR, config[:name])
+  FileUtils.rm_rf(frame_dir)
+  FileUtils.mkdir_p(frame_dir)
+
+  payload = {
+    width: config[:width],
+    height: config[:height],
+    delay_ms: config[:delay_ms],
+    font_path: FONT_PATH,
+    frames: config[:frame_count].times.map do |frame_index|
+      {
+        lines: serializable_lines(renderer_lines(config, frame_index)),
+      }
+    end,
+  }
+
+  payload_path = File.join(frame_dir, "frames.json")
+  gif_path = File.join(OUTPUT_DIR, "#{config[:name]}.gif")
+  File.write(payload_path, JSON.pretty_generate(payload))
+  run!("python3", PYTHON_RENDERER, payload_path, gif_path)
+  gif_path
+end
+
+abort "python3 is required" unless system("/bin/sh", "-lc", "command -v python3 >/dev/null")
+abort "render helper is missing" unless File.exist?(PYTHON_RENDERER)
+abort "font not found: #{FONT_PATH}" unless File.exist?(FONT_PATH)
+
+FileUtils.mkdir_p(OUTPUT_DIR)
+FileUtils.mkdir_p(WORK_DIR)
+
+demos = [
+  {
+    name: "progress-crystal-demo",
+    title: "Compile assets",
+    width: 1100,
+    height: 220,
+    total: 120,
+    frame_count: 26,
+    seconds_per_frame: 0.22,
+    elapsed_base: 1.2,
+    delay_ms: 70,
+    seed: 100,
+    renderer: {
+      style: :crystal,
+      palette: :crystal,
+      width: 34,
+      spinner: :braille,
+    },
+  },
+  {
+    name: "progress-metrics-demo",
+    title: "Nightly deploy",
+    width: 1280,
+    height: 360,
+    total: 80,
+    frame_count: 28,
+    seconds_per_frame: 0.18,
+    elapsed_base: 1.0,
+    delay_ms: 70,
+    seed: 300,
+    renderer: {
+      style: :cyberpunk,
+      palette: :neon,
+      width: 32,
+      spinner: :sparkle,
+      rainbow_mode: true,
+      glow: true,
+    },
+    metrics_builder: ->(frame_index) { build_metrics(frame_index, :deploy) },
+  },
+]
+
+generated = demos.map { |config| generate_demo(config) }
+puts "Generated demo assets:"
+generated.each { |path| puts "  #{path}" }

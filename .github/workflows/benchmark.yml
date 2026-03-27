@@ -1,0 +1,86 @@
+name: Benchmark Matrix
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        ruby: ["3.3", "4.0"]
+        shell: [bash, zsh]
+        exclude:
+          # zsh not reliably available on ubuntu runners
+          - os: ubuntu-latest
+            shell: zsh
+
+    runs-on: ${{ matrix.os }}
+    name: "${{ matrix.os }} / ruby-${{ matrix.ruby }} / ${{ matrix.shell }}"
+
+    env:
+      BENCH_JSON: "1"
+      BENCH_JSON_PATH: "tmp/benchmark_${{ matrix.os }}_ruby${{ matrix.ruby }}_${{ matrix.shell }}.json"
+      SHELL: "/bin/${{ matrix.shell }}"
+      TERM: "xterm-256color"
+      TERM_PROGRAM: "github-actions"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run benchmarks (bash)
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: |
+          bundle exec rake benchmark
+
+      - name: Run benchmarks (zsh)
+        if: matrix.shell == 'zsh'
+        shell: zsh {0}
+        run: |
+          bundle exec rake benchmark
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ matrix.os }}-ruby${{ matrix.ruby }}-${{ matrix.shell }}
+          path: tmp/benchmark_*.json
+          retention-days: 90
+
+  collate:
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: Download all benchmark artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: tmp/bench-results
+          pattern: bench-*
+          merge-multiple: true
+
+      - name: Generate comparison chart
+        run: ruby bin/collate_benchmarks.rb tmp/bench-results tmp/benchmark_chart.md
+
+      - name: Upload comparison chart
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-matrix-chart
+          path: tmp/benchmark_chart.md

@@ -1,0 +1,415 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/cockpit3000"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PROGRESS INFO-OVERLOAD COCKPIT 3000 - MAXIMUM PIZZAZZ EDITION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def rainbow_print(text, delay = 0.02)
+  text.each_char.with_index do |char, i|
+    color = Cockpit3000::ANSI.rainbow_cycle(i * 0.1, Time.now.to_f, 2.0)
+    print "#{color}#{char}\e[0m"
+    $stdout.flush
+    sleep(delay) if delay > 0
+  end
+  puts
+end
+
+def print_header(text)
+  puts
+  border = "═" * 74
+  puts "\e[1;38;2;255;0;255m#{border}\e[0m"
+  rainbow_print("  #{text}", 0.01)
+  puts "\e[1;38;2;0;255;255m#{border}\e[0m"
+  puts
+  sleep 0.5
+end
+
+def print_section(text)
+  puts
+  puts "\e[38;2;255;200;100m▸ #{text}\e[0m"
+  puts
+  sleep 0.3
+end
+
+def clear_line
+  print "\r\e[2K"
+end
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTRO ANIMATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+puts "\e[?25l" # Hide cursor
+
+# Epic intro
+3.times do
+  puts
+end
+
+rainbow_print("                    ╔═══════════════════════════════════════════════╗", 0.005)
+rainbow_print("                    ║                                               ║", 0.005)
+rainbow_print("                    ║   PROGRESS INFO-OVERLOAD COCKPIT 3000         ║", 0.005)
+rainbow_print("                    ║                                               ║", 0.005)
+rainbow_print("                    ║            MAXIMUM PIZZAZZ EDITION            ║", 0.005)
+rainbow_print("                    ║                                               ║", 0.005)
+rainbow_print("                    ╚═══════════════════════════════════════════════╝", 0.005)
+
+puts
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 1: Showcase all the new palettes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 1: FREAKY COLOR PALETTES")
+
+print_section("Original palettes: crystal, fire, ocean, forest, sunset, rainbow")
+
+[:crystal, :fire, :ocean, :sunset, :rainbow].each do |palette|
+  (1..25).with_progress(title: "#{palette.to_s.upcase}", palette: palette).each do
+    sleep(0.02)
+  end
+  sleep 0.1
+end
+
+print_section("NEW FREAKY PALETTES: neon, synthwave, vaporwave, acid, plasma")
+
+[:neon, :synthwave, :vaporwave, :acid, :plasma].each do |palette|
+  (1..25).with_progress(title: "🌈 #{palette.to_s.upcase}", palette: palette, glow: true).each do
+    sleep(0.02)
+  end
+  sleep 0.1
+end
+
+print_section("Dark & dangerous palettes: matrix, lava, galaxy, toxic, hacker")
+
+[:matrix, :lava, :galaxy, :toxic, :hacker].each do |palette|
+  (1..25).with_progress(title: "☠️  #{palette.to_s.upcase}", palette: palette).each do
+    sleep(0.02)
+  end
+  sleep 0.1
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 2: Epic new bar styles
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 2: EPIC BAR STYLES")
+
+print_section("Animated bar styles with special effects!")
+
+[
+  [:fire, :lava, "🔥 FIRE STYLE - Flickering flames!"],
+  [:nyan, :rainbow, "🐱 NYAN STYLE - Legendary!"],
+  [:matrix, :matrix, "💊 MATRIX STYLE - Digital rain!"],
+  [:glitch, :plasma, "📺 GLITCH STYLE - VHS vibes!"],
+  [:electric, :neon, "⚡ ELECTRIC STYLE - Shocking!"],
+  [:skull, :toxic, "💀 SKULL STYLE - Spooky!"],
+  [:hearts, :vaporwave, "💖 HEARTS STYLE - Love!"],
+  [:rocket, :fire, "🚀 ROCKET STYLE - To the moon!"],
+].each do |style, palette, title|
+  (1..30).with_progress(title: title, style: style, palette: palette, glow: true).each do
+    sleep(0.03)
+  end
+  sleep 0.2
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 3: Rainbow Mode
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 3: RAINBOW CYCLING MODE")
+
+print_section("Enable rainbow_mode for hypnotic color cycling animation!")
+
+(1..50).with_progress(
+  title: "🌈 RAINBOW MODE ACTIVATED 🌈",
+  rainbow_mode: true,
+  style: :blocks,
+  width: 50,
+  fps: 30
+).each do
+  sleep(0.04)
+end
+
+sleep 0.5
+
+(1..50).with_progress(
+  title: "✨ RAINBOW + NYAN = ULTIMATE ✨",
+  rainbow_mode: true,
+  style: :nyan,
+  width: 50,
+  fps: 30,
+  glow: true
+).each do
+  sleep(0.04)
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 4: All the spinners
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 4: EXOTIC SPINNERS")
+
+print_section("So many spinner styles!")
+
+spinners_to_show = [:braille, :moon, :clock, :earth, :fire, :sparkle, :nyan, :rocket, :hearts, :explosion, :weather]
+
+spinners_to_show.each do |spinner|
+  (1..20).with_progress(
+    title: "Spinner: #{spinner}",
+    spinner: spinner,
+    palette: :rainbow,
+    rainbow_mode: true
+  ).each do
+    sleep(0.04)
+  end
+  sleep 0.1
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 5: Celebration Effects
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 5: CELEBRATION EFFECTS")
+
+print_section("Different celebration styles when progress completes!")
+
+[:confetti, :firework, :party, :success].each do |celebration|
+  (1..20).with_progress(
+    title: "🎊 Celebration: #{celebration}",
+    celebration: celebration,
+    palette: :neon,
+    rainbow_mode: true
+  ).each do
+    sleep(0.03)
+  end
+  sleep 1  # Enjoy the celebration!
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 6: Metrics with Pizzazz
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 6: METRICS WITH MAXIMUM PIZZAZZ")
+
+print_section("Real-time metrics tracking with sparkline graphs!")
+
+work_items = (1..50).map do |i|
+  {
+    id: i,
+    complexity: rand(1..10),
+    data_size: rand(100..10000),
+  }
+end
+
+work_items.with_progress(
+  title: "🔬 ANALYZING DATA WITH STYLE 🔬",
+  palette: :synthwave,
+  style: :cyberpunk,
+  rainbow_mode: true,
+  spinner: :sparkle,
+  celebration: :firework,
+  glow: true,
+  fps: 30
+).each do |item|
+  sleep_time = item[:complexity] * 0.01
+  sleep(sleep_time)
+
+  {
+    latency_ms: (sleep_time * 1000).round(1) + rand(-5..5),
+    throughput: (item[:data_size] / [sleep_time, 0.01].max).round(0),
+    cpu_percent: rand(10..95),
+    memory_mb: rand(50..500),
+  }
+end
+
+sleep 2
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 7: High-Speed Maximum FPS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 7: HIGH-SPEED 60 FPS MODE")
+
+print_section("Buttery smooth 60 FPS animation!")
+
+(1..200).with_progress(
+  title: "⚡ LUDICROUS SPEED ⚡",
+  palette: :acid,
+  style: :electric,
+  rainbow_mode: true,
+  spinner: :rocket,
+  celebration: :firework,
+  glow: true,
+  fps: 60,
+  width: 50
+).each do
+  sleep(0.005)
+end
+
+sleep 2
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 8: ASCII Art Showcase
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 8: ASCII ART ANIMATIONS")
+
+print_section("Embedded ASCII art animations!")
+
+# Fire animation
+puts "🔥 Fire Animation:"
+5.times do |frame|
+  puts Cockpit3000::Graphics.ascii_art(:fire, frame)
+  sleep 0.2
+  print "\e[12A"  # Move up
+end
+puts "\n" * 12
+
+# Matrix animation
+puts "💊 Matrix Rain:"
+5.times do |frame|
+  puts Cockpit3000::Graphics.ascii_art(:matrix, frame)
+  sleep 0.3
+  print "\e[5A"
+end
+puts "\n" * 5
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Demo 9: Decorative Frames
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("DEMO 9: DECORATIVE FRAMES")
+
+print_section("Beautiful borders and frames!")
+
+content = [
+  "This is framed content",
+  "With multiple lines",
+  "Looking absolutely fabulous!",
+]
+
+[:single, :double, :rounded, :bold, :cyber, :neon, :stars].each do |style|
+  puts
+  puts "Style: #{style}"
+  framed = Cockpit3000::Frames.wrap(content, style: style, palette: :neon, title: "#{style.to_s.upcase}")
+  framed.each { |line| puts line }
+  sleep 0.3
+end
+
+# Animated banner
+puts
+puts "Animated Banner:"
+5.times do |frame|
+  banner = Cockpit3000::Frames.banner("MAXIMUM PIZZAZZ", animated: true, frame_num: frame)
+  banner.each { |line| puts line }
+  sleep 0.2
+  print "\e[3A" if frame < 4
+end
+
+sleep 1
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# GRAND FINALE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_header("GRAND FINALE: THE ULTIMATE PROGRESS BAR")
+
+print_section("Combining ALL the features for MAXIMUM EFFECT!")
+
+(1..100).with_progress(
+  title: "🚀🔥✨ ULTIMATE COCKPIT MODE ✨🔥🚀",
+  palette: :neon,
+  style: :fire,
+  rainbow_mode: true,
+  spinner: :rocket,
+  celebration: :party,
+  glow: true,
+  fps: 60,
+  width: 50
+).each do |i|
+  sleep(0.02)
+
+  # Return epic metrics
+  if i % 5 == 0
+    {
+      power_level: rand(9000..10000),
+      awesome_factor: rand(95..100),
+      pizzazz_units: rand(1000..2000),
+      hype_index: rand(80..100),
+    }
+  end
+end
+
+sleep 2
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SUMMARY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+puts
+puts "\e[1;38;2;255;200;100m" + "═" * 74 + "\e[0m"
+puts
+rainbow_print("          ✨ PROGRESS INFO-OVERLOAD COCKPIT 3000 DEMO COMPLETE! ✨", 0.01)
+puts
+puts "  \e[38;2;180;180;180mNew features demonstrated:\e[0m"
+puts
+puts "  \e[38;2;255;0;255m● FREAKY PALETTES:\e[0m neon, synthwave, vaporwave, acid, plasma, matrix,"
+puts "                    lava, ice, galaxy, toxic, hacker"
+puts
+puts "  \e[38;2;0;255;255m● EPIC BAR STYLES:\e[0m fire, nyan, matrix, glitch, plasma, wave, electric,"
+puts "                    skull, hearts, stars, cyberpunk, snake, music, rocket"
+puts
+puts "  \e[38;2;255;255;0m● EXOTIC SPINNERS:\e[0m moon, clock, earth, fire, sparkle, nyan, rocket,"
+puts "                    hearts, explosion, weather, and many more!"
+puts
+puts "  \e[38;2;0;255;0m● ANIMATIONS:\e[0m rainbow cycling, traveling shimmer, fire flicker,"
+puts "              matrix rain, glitch effects, neon glow"
+puts
+puts "  \e[38;2;255;100;0m● CELEBRATIONS:\e[0m confetti, firework, party, success"
+puts
+puts "  \e[38;2;100;200;255m● FRAMES:\e[0m single, double, rounded, bold, cyber, neon, stars"
+puts
+puts "  \e[38;2;255;0;100m● GRAPHICS:\e[0m Kitty/iTerm2 inline image protocol support,"
+puts "             ASCII art animations (fire, matrix, nyan, etc.)"
+puts
+puts "\e[1;38;2;255;200;100m" + "═" * 74 + "\e[0m"
+puts
+
+puts "\e[38;2;150;150;150mUsage examples:\e[0m"
+puts
+puts "  \e[38;2;100;200;255m# Maximum pizzazz mode\e[0m"
+puts "  \e[38;2;255;200;100mitems.with_progress("
+puts "    title: '🔥 TURBO MODE 🔥',"
+puts "    style: :fire,"
+puts "    palette: :neon,"
+puts "    rainbow_mode: true,"
+puts "    spinner: :rocket,"
+puts "    celebration: :firework,"
+puts "    glow: true,"
+puts "    fps: 60"
+puts "  ).each { |item| process(item) }\e[0m"
+puts
+puts "  \e[38;2;100;200;255m# Show all available options\e[0m"
+puts "  \e[38;2;255;200;100mCockpit3000.palette_showcase\e[0m"
+puts "  \e[38;2;255;200;100mCockpit3000.style_showcase\e[0m"
+puts "  \e[38;2;255;200;100mCockpit3000.spinner_showcase\e[0m"
+puts
+
+print "\e[?25h"  # Show cursor

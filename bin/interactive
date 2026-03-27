@@ -1,0 +1,276 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative "../lib/cockpit3000"
+require "io/console"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PROGRESS COCKPIT 3000 - INTERACTIVE MODE
+#  Use number keys 1-0 to cycle through options
+#  Press Q to quit, SPACE to restart, R for random
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class InteractiveDemo
+  PALETTES = Cockpit3000.available_palettes
+  STYLES = Cockpit3000.available_styles
+  SPINNERS = Cockpit3000.available_spinners
+  CELEBRATIONS = Cockpit3000.available_celebrations
+
+  # Parameter mappings for keys 1-0
+  PARAMS = {
+    "1" => :palette,
+    "2" => :style,
+    "3" => :spinner,
+    "4" => :celebration,
+    "5" => :rainbow_mode,
+    "6" => :glow,
+    "7" => :fps,
+    "8" => :width,
+    "9" => :reserved1,
+    "0" => :reserved2,
+  }
+
+  FPS_OPTIONS = [15, 30, 60]
+  WIDTH_OPTIONS = [30, 40, 50, 60]
+
+  def initialize
+    @palette_idx = rand(PALETTES.length)
+    @style_idx = rand(STYLES.length)
+    @spinner_idx = rand(SPINNERS.length)
+    @celebration_idx = rand(CELEBRATIONS.length)
+    @rainbow_mode = [true, false].sample
+    @glow = [true, false].sample
+    @fps_idx = rand(FPS_OPTIONS.length)
+    @width_idx = rand(WIDTH_OPTIONS.length)
+
+    @running = true
+    @last_random_change = Time.now
+    @progress = 0.0
+    @items_done = 0
+    @total_items = 100
+    @start_time = Time.now
+  end
+
+  def current_options
+    {
+      palette: PALETTES[@palette_idx],
+      style: STYLES[@style_idx],
+      spinner: SPINNERS[@spinner_idx],
+      celebration: CELEBRATIONS[@celebration_idx],
+      rainbow_mode: @rainbow_mode,
+      glow: @glow,
+      fps: FPS_OPTIONS[@fps_idx],
+      width: WIDTH_OPTIONS[@width_idx],
+    }
+  end
+
+  def cycle_param(param, direction = 1)
+    case param
+    when :palette
+      @palette_idx = (@palette_idx + direction) % PALETTES.length
+    when :style
+      @style_idx = (@style_idx + direction) % STYLES.length
+    when :spinner
+      @spinner_idx = (@spinner_idx + direction) % SPINNERS.length
+    when :celebration
+      @celebration_idx = (@celebration_idx + direction) % CELEBRATIONS.length
+    when :rainbow_mode
+      @rainbow_mode = !@rainbow_mode
+    when :glow
+      @glow = !@glow
+    when :fps
+      @fps_idx = (@fps_idx + direction) % FPS_OPTIONS.length
+    when :width
+      @width_idx = (@width_idx + direction) % WIDTH_OPTIONS.length
+    end
+  end
+
+  def randomize_one
+    params = [:palette, :style, :spinner, :celebration, :rainbow_mode, :glow, :fps, :width]
+    param = params.sample
+    if [:rainbow_mode, :glow].include?(param)
+      cycle_param(param)
+    else
+      cycle_param(param, rand(1..5))
+    end
+    param
+  end
+
+  def randomize_all
+    @palette_idx = rand(PALETTES.length)
+    @style_idx = rand(STYLES.length)
+    @spinner_idx = rand(SPINNERS.length)
+    @celebration_idx = rand(CELEBRATIONS.length)
+    @rainbow_mode = [true, false].sample
+    @glow = [true, false].sample
+    @fps_idx = rand(FPS_OPTIONS.length)
+    @width_idx = rand(WIDTH_OPTIONS.length)
+  end
+
+  def restart_progress
+    @progress = 0.0
+    @items_done = 0
+    @start_time = Time.now
+  end
+
+  def print_controls
+    puts
+    puts "\e[38;2;100;200;255m" + "═" * 74 + "\e[0m"
+    puts "\e[1;38;2;255;200;100m  INTERACTIVE COCKPIT CONTROLS\e[0m"
+    puts "\e[38;2;100;200;255m" + "═" * 74 + "\e[0m"
+    puts
+    puts "  \e[38;2;255;100;255m1\e[0m = Palette     \e[38;2;255;100;255m2\e[0m = Style      \e[38;2;255;100;255m3\e[0m = Spinner    \e[38;2;255;100;255m4\e[0m = Celebration"
+    puts "  \e[38;2;255;100;255m5\e[0m = Rainbow     \e[38;2;255;100;255m6\e[0m = Glow       \e[38;2;255;100;255m7\e[0m = FPS        \e[38;2;255;100;255m8\e[0m = Width"
+    puts
+    puts "  \e[38;2;0;255;255mSPACE\e[0m = Restart   \e[38;2;0;255;255mR\e[0m = Randomize all   \e[38;2;0;255;255mQ\e[0m = Quit"
+    puts
+    puts "\e[38;2;100;100;100m  Auto-randomize: One parameter changes every 10 seconds\e[0m"
+    puts
+  end
+
+  def print_current_state
+    opts = current_options
+
+    print "\e[2K\r"  # Clear line
+    print "  "
+    print "\e[38;2;255;100;255m1:\e[0m#{opts[:palette].to_s.ljust(12)} "
+    print "\e[38;2;255;100;255m2:\e[0m#{opts[:style].to_s.ljust(10)} "
+    print "\e[38;2;255;100;255m3:\e[0m#{opts[:spinner].to_s.ljust(10)} "
+    print "\e[38;2;255;100;255m4:\e[0m#{opts[:celebration].to_s.ljust(10)}"
+    puts
+
+    print "\e[2K\r"
+    print "  "
+    print "\e[38;2;255;100;255m5:\e[0m#{opts[:rainbow_mode] ? "ON " : "OFF"} rainbow  "
+    print "\e[38;2;255;100;255m6:\e[0m#{opts[:glow] ? "ON " : "OFF"} glow     "
+    print "\e[38;2;255;100;255m7:\e[0m#{opts[:fps]} FPS      "
+    print "\e[38;2;255;100;255m8:\e[0mwidth #{opts[:width]}"
+    puts
+  end
+
+  def run
+    print "\e[?25l"  # Hide cursor
+
+    print_controls
+
+    # Non-blocking input thread
+    input_thread = Thread.new do
+      loop do
+        break unless @running
+
+        if IO.select([$stdin], nil, nil, 0.1)
+          char = $stdin.getch rescue nil
+          break unless @running
+
+          case char&.downcase
+          when "q"
+            @running = false
+          when " "
+            restart_progress
+          when "r"
+            randomize_all
+            restart_progress
+          when "1".."9", "0"
+            param = PARAMS[char]
+            cycle_param(param) if param
+          end
+        end
+      end
+    end
+
+    # Main render loop
+    begin
+      renderer = nil
+      last_render = Time.now
+
+      while @running
+        opts = current_options
+        render_interval = 1.0 / opts[:fps]
+
+        # Auto-randomize every 10 seconds
+        if Time.now - @last_random_change > 10
+          changed_param = randomize_one
+          @last_random_change = Time.now
+        end
+
+        # Only update at the configured FPS
+        if Time.now - last_render >= render_interval
+          # Create new renderer with current options
+          renderer = Cockpit3000::Renderer.new(
+            style: opts[:style],
+            width: opts[:width],
+            palette: opts[:palette],
+            spinner: opts[:spinner],
+            rainbow_mode: opts[:rainbow_mode],
+            celebration_mode: opts[:celebration],
+            glow: opts[:glow]
+          )
+
+          # Increment progress
+          @items_done = (@items_done + 1) % (@total_items + 1)
+          @progress = @items_done.to_f / @total_items
+
+          # Reset if complete
+          if @items_done == 0
+            sleep 0.5  # Brief pause at completion
+          end
+
+          # Build state
+          elapsed = Time.now - @start_time
+          rate = @items_done > 0 ? @items_done / elapsed : 0
+          eta = rate > 0 ? (@total_items - @items_done) / rate : Float::INFINITY
+
+          state = {
+            progress: @progress,
+            current: @items_done,
+            total: @total_items,
+            elapsed: elapsed,
+            eta: eta,
+            rate: rate,
+            metrics: nil,
+            finished: @progress >= 1.0,
+          }
+
+          # Render
+          lines = renderer.render(state)
+
+          # Clear and print
+          print "\e[H"  # Home cursor
+          print "\e[7B"  # Move down past controls
+
+          print_current_state
+
+          puts
+          title_color = opts[:rainbow_mode] ?
+            Cockpit3000::ANSI.rainbow_cycle(0.5, Time.now.to_f, 1.0) :
+            Cockpit3000::ANSI.palette_color(opts[:palette], 0.5)
+          puts "  #{Cockpit3000::ANSI::BOLD}#{title_color}🎮 INTERACTIVE DEMO 🎮#{Cockpit3000::ANSI::RESET}"
+          puts
+
+          lines.each do |line|
+            puts "  #{line}"
+          end
+
+          # Pad remaining space
+          5.times { puts }
+
+          last_render = Time.now
+        end
+
+        sleep 0.01  # Small sleep to reduce CPU
+      end
+    ensure
+      print "\e[?25h"  # Show cursor
+      puts
+      puts "\e[38;2;100;200;255mThanks for using Progress Cockpit 3000!\e[0m"
+      puts
+    end
+
+    input_thread.join
+  end
+end
+
+# Clear screen and run
+print "\e[2J\e[H"
+demo = InteractiveDemo.new
+demo.run
