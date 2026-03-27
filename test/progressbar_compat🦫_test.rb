@@ -1,4 +1,4 @@
-require "minitest/autorun"
+require_relative "test_helper"
 require_relative "../lib/cockpit3000"
 
 class ProgressbarCompatTest < Minitest::Test
