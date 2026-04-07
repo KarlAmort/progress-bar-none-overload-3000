@@ -13,6 +13,10 @@ require_relative "progress🦫bar🦫none/gantt🦫"
 require_relative "progress🦫bar🦫none/multi_bar🦫"
 require_relative "progress🦫bar🦫none/download_thread_state🦫"
 require_relative "progress🦫bar🦫none/progressbar_compat🦫"
+require_relative "progress🦫bar🦫none/sound🦫"
+
+# Load Rake integration only when Rake is already in scope
+require_relative "progress🦫bar🦫none/rake🦫" if defined?(::Rake)
 
 module ProgressBarNone
   BRAND_NAME = "PROGRESS🦫BAR🦫NONE"
