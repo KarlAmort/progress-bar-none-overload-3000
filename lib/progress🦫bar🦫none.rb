@@ -16,6 +16,7 @@ require_relative "progress🦫bar🦫none/progressbar_compat🦫"
 require_relative "progress🦫bar🦫none/sound🦫"
 
 # Load Rake integration only when Rake is already in scope
+require_relative "progress🦫bar🦫none/dashboard🦫"
 require_relative "progress🦫bar🦫none/rake🦫" if defined?(::Rake)
 
 module ProgressBarNone

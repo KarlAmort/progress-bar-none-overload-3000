@@ -64,10 +64,12 @@ class ProgressBarNoneTest < Minitest::Test
     bar = ProgressBarNone::Bar.new(total: 10, output: output)
     bar.start
 
+    sleep rand(0.001..0.005)
     bar.increment
     assert_equal 1, bar.current
     assert_in_delta 0.1, bar.progress, 0.01
 
+    sleep rand(0.001..0.005)
     bar.increment(5)
     assert_equal 6, bar.current
 
@@ -80,6 +82,7 @@ class ProgressBarNoneTest < Minitest::Test
     bar.start
 
     5.times do |i|
+      sleep rand(0.001..0.005)
       bar.increment(metrics: { value: i * 10 })
     end
 
@@ -98,6 +101,7 @@ class ProgressBarNoneTest < Minitest::Test
     results = []
 
     [1, 2, 3].with_progress(output: output).each do |i|
+      sleep rand(0.001..0.005)
       results << i
     end
 
@@ -109,6 +113,7 @@ class ProgressBarNoneTest < Minitest::Test
     collected_values = []
 
     [10, 20, 30].with_progress(output: output).each do |val|
+      sleep rand(0.001..0.005)
       collected_values << val
       { recorded: val }
     end
@@ -126,12 +131,33 @@ class ProgressBarNoneTest < Minitest::Test
   end
 
   def test_renderer_palettes
-    palettes = [:crystal, :fire, :ocean, :forest, :sunset, :rainbow, :mono]
-    palettes.each do |palette|
+    ProgressBarNone::ANSI::CRYSTAL_PALETTE.each_key do |palette|
       renderer = ProgressBarNone::Renderer.new(palette: palette)
       state = { progress: 0.5, current: 50, total: 100 }
       output = renderer.render(state)
-      refute_empty output
+      refute_empty output, "palette #{palette.inspect} produced empty output"
+    end
+  end
+
+  def test_all_palettes_produce_valid_rgb
+    ProgressBarNone::ANSI::CRYSTAL_PALETTE.each_key do |palette|
+      [0.0, 0.25, 0.5, 0.75, 1.0].each do |progress|
+        color = ProgressBarNone::ANSI.palette_color(palette, progress)
+        assert_match(/\A\e\[38;2;\d+;\d+;\d+m\z/, color,
+          "palette #{palette.inspect} at #{progress} didn't produce a valid RGB escape")
+      end
+    end
+  end
+
+  def test_all_styles_produce_ansi_output
+    ProgressBarNone::Renderer::STYLES.each_key do |style|
+      ProgressBarNone::ANSI::CRYSTAL_PALETTE.each_key do |palette|
+        renderer = ProgressBarNone::Renderer.new(style: style, palette: palette)
+        state = { progress: 0.5, current: 50, total: 100 }
+        lines = renderer.render(state)
+        assert lines.any? { |l| l.include?("\e[") },
+          "style #{style.inspect} + palette #{palette.inspect} produced no ANSI output"
+      end
     end
   end
 end

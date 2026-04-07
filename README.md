@@ -1,8 +1,32 @@
+# PunPun goes PanPan
+## Character Flaw [pintended!]
+
+Yes, there are emojis in module and file names. This is, obviously, a perversion. Using them is a signal that I am not touching any of these texts with a ten-foot pole. You have been warned.
+
 # PROGRESS🦫BAR🦫NONE
 
 Animated progress bars for Ruby CLI applications with 15+ color palettes, 20+ bar styles, real-time metrics, sparkline graphs, Gantt charts, and terminal graphics support.
 
+**Drop-in replacement for `ruby-progressbar`!**
+
+PROGRESS🦫BAR🦫NONE is fully API-compatible with the popular [`ruby-progressbar`](https://github.com/jfelchner/ruby-progressbar) gem. You can swap it in with no code changes—just require this gem and use your existing `ProgressBar.create(...)` calls. All progress bar features, including custom formatting, are supported out of the box, with extra pizzazz and color.
+
+```ruby
+require "progress🦫bar🦫none/progressbar_compat🦫"
+bar = ProgressBar.create(total: 100, title: "Working")
+100.times { bar.increment }
+bar.finish
+```
+
+See [ProgressBar compatibility](#progressbar-compatibility) for details.
+
 Brand name: `PROGRESS🦫BAR🦫NONE`. Ruby API aliases: `Cockpit3000`, `PROGRESSBARNONE`, `ProgressBarNone` -- all equivalent.
+
+---
+
+> **Disclaimer:** This project is extremely vibecoded. I am, in fact, quite sorry. It is not intended to be entirely on-the-level, but it just happens to be genuinely useful. If you find yourself enjoying it, that's on you. 🦫
+
+---
 
 ## Installation
 

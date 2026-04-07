@@ -6,136 +6,218 @@ module ProgressBarNone
   # Kitty Graphics Protocol support for inline images in terminal
   # Works with Ghostty, Kitty, WezTerm, and other compatible terminals
   module Graphics
-    # Kitty Graphics Protocol escape sequences
-    # Format: <ESC>_G<control data>;<payload><ESC>\
+    # Kitty Graphics Protocol APC escape sequences
+    # Format: ESC _ G <control-data> ; <payload> ESC \
     KITTY_START = "\e_G"
-    KITTY_END = "\e\\"
+    KITTY_END   = "\e\\"
 
-    # iTerm2 protocol (also supported by many terminals)
+    # iTerm2 inline image protocol
     ITERM_START = "\e]1337;File="
-    ITERM_END = "\a"
+    ITERM_END   = "\a"
+
+    # Max bytes per Kitty chunk (base64-encoded)
+    KITTY_CHUNK_SIZE = 4096
 
     class << self
-      # Check if terminal supports Kitty graphics protocol
+      # Check if terminal supports Kitty graphics protocol.
+      # Ghostty sets TERM=xterm-ghostty and GHOSTTY_RESOURCES_DIR.
       def kitty_supported?
-        term = ENV["TERM"] || ""
-        term_program = ENV["TERM_PROGRAM"] || ""
+        term         = ENV.fetch("TERM", "")
+        term_program = ENV.fetch("TERM_PROGRAM", "")
 
-        # Known supporting terminals
-        term.include?("kitty") ||
+        term.include?("kitty")    ||
           term.include?("ghostty") ||
-          term_program.downcase.include?("kitty") ||
-          term_program.downcase.include?("ghostty") ||
-          term_program.downcase.include?("wezterm")
+          term_program.downcase.include?("kitty")    ||
+          term_program.downcase.include?("ghostty")  ||
+          term_program.downcase.include?("wezterm")  ||
+          ENV.key?("GHOSTTY_RESOURCES_DIR")
       end
 
-      # Check if terminal supports iTerm2 graphics protocol
+      # Check if terminal supports iTerm2 inline image protocol
       def iterm_supported?
-        term_program = ENV["TERM_PROGRAM"] || ""
-        lc_terminal = ENV["LC_TERMINAL"] || ""
+        term_program = ENV.fetch("TERM_PROGRAM", "")
+        lc_terminal  = ENV.fetch("LC_TERMINAL", "")
 
-        term_program.include?("iTerm") ||
-          lc_terminal.include?("iTerm") ||
+        term_program.include?("iTerm")               ||
+          lc_terminal.include?("iTerm")              ||
           term_program.downcase.include?("wezterm")
       end
 
-      # Display an image using the best available protocol
-      # @param path [String] Path to image file (PNG, GIF, JPEG, etc.)
-      # @param width [Integer, nil] Width in cells (nil = auto)
-      # @param height [Integer, nil] Height in cells (nil = auto)
-      # @param preserve_aspect [Boolean] Preserve aspect ratio
-      # @return [String] Escape sequence to display image
-      def display_image(path, width: nil, height: nil, preserve_aspect: true)
+      # Display an image file using the best available protocol.
+      # @param path [String]          Path to image file (PNG, JPEG, GIF, …)
+      # @param cols [Integer, nil]    Width in terminal columns (nil = auto)
+      # @param rows [Integer, nil]    Height in terminal rows (nil = auto)
+      # @param image_id [Integer, nil] Kitty image ID for later deletion
+      # @return [String]              Escape sequence, ready to print
+      def display_image(path, cols: nil, rows: nil, image_id: nil, preserve_aspect: true)
         return "" unless File.exist?(path)
 
         if kitty_supported?
-          kitty_display_image(path, width: width, height: height)
+          kitty_display_image(path, cols: cols, rows: rows, image_id: image_id)
         elsif iterm_supported?
-          iterm_display_image(path, width: width, height: height, preserve_aspect: preserve_aspect)
+          iterm_display_image(path, cols: cols, rows: rows, preserve_aspect: preserve_aspect)
         else
-          # Fallback: return empty or ASCII art placeholder
-          ascii_placeholder(width || 10, height || 3)
+          ascii_placeholder(cols || 20, rows || 4)
         end
       end
 
-      # Display image using Kitty graphics protocol
-      def kitty_display_image(path, width: nil, height: nil)
+      # Transmit and display a PNG/JPEG/GIF from a file path via the Kitty
+      # Graphics Protocol (f=100 = PNG/auto-detect).
+      def kitty_display_image(path, cols: nil, rows: nil, image_id: nil)
         data = File.binread(path)
-        encoded = Base64.strict_encode64(data)
+        kitty_encode(data, format: 100, cols: cols, rows: rows, image_id: image_id)
+      end
 
-        # Build control data
-        controls = []
-        controls << "a=T"  # Action: transmit and display
-        controls << "f=100" # Format: PNG (auto-detect)
-        controls << "t=d"  # Transmission: direct
-        controls << "c=#{width}" if width
-        controls << "r=#{height}" if height
+      # Transmit and display raw RGBA pixel data via the Kitty Graphics Protocol.
+      # @param rgba_data    [String]  Binary string of R,G,B,A bytes
+      # @param pixel_width  [Integer] Image width in pixels
+      # @param pixel_height [Integer] Image height in pixels
+      # @param cols  [Integer, nil]   Display width in terminal columns
+      # @param rows  [Integer, nil]   Display height in terminal rows
+      # @param image_id [Integer, nil] Optional ID for later deletion
+      def kitty_display_pixels(rgba_data, pixel_width:, pixel_height:,
+                                cols: nil, rows: nil, image_id: nil)
+        kitty_encode(rgba_data, format: 32,
+                     pixel_width: pixel_width, pixel_height: pixel_height,
+                     cols: cols, rows: rows, image_id: image_id)
+      end
 
-        # Chunk the data (max 4096 bytes per chunk)
-        chunks = encoded.scan(/.{1,4096}/)
-        result = ""
+      # Render a gradient progress bar as inline pixels via Kitty protocol.
+      # @param progress   [Float]   0.0..1.0
+      # @param width_px   [Integer] Bar width in pixels
+      # @param height_px  [Integer] Bar height in pixels
+      # @param palette    [Symbol]  CRYSTAL_PALETTE key
+      # @param cols       [Integer, nil] Terminal column width override
+      # @param rows       [Integer, nil] Terminal row height override
+      # @param image_id   [Integer, nil]
+      def kitty_progress_bar(progress, width_px: 400, height_px: 20,
+                              palette: :crystal, cols: nil, rows: nil, image_id: nil)
+        progress = progress.clamp(0.0, 1.0)
+        filled_px = (progress * width_px).round
 
-        chunks.each_with_index do |chunk, i|
-          is_last = i == chunks.length - 1
-          ctrl = controls.dup
-          ctrl << (is_last ? "m=0" : "m=1")
+        pal = ANSI::CRYSTAL_PALETTE[palette] || ANSI::CRYSTAL_PALETTE[:crystal]
 
-          result += "#{KITTY_START}#{ctrl.join(",")};#{chunk}#{KITTY_END}"
+        # Build raw RGBA pixel data row-by-row
+        pixels = "".b
+        height_px.times do
+          width_px.times do |x|
+            if x < filled_px
+              pos = filled_px > 1 ? x.to_f / (filled_px - 1) : 0.0
+              r, g, b = interpolate_palette(pal, pos)
+              pixels << [r, g, b, 255].pack("C4")
+            else
+              # Unfilled: very dark
+              pixels << [15, 15, 25, 255].pack("C4")
+            end
+          end
         end
 
-        result
+        kitty_display_pixels(pixels, pixel_width: width_px, pixel_height: height_px,
+                              cols: cols, rows: rows, image_id: image_id)
       end
 
-      # Display image using iTerm2 protocol
-      def iterm_display_image(path, width: nil, height: nil, preserve_aspect: true)
-        data = File.binread(path)
+      # Delete a previously displayed Kitty image by ID.
+      # @param image_id [Integer]
+      # @param what [String] Kitty delete action ('i' = by ID, 'A' = all)
+      def kitty_delete_image(image_id, what: "i")
+        "#{KITTY_START}a=d,d=#{what},i=#{image_id};#{KITTY_END}"
+      end
+
+      # Display image using iTerm2 inline image protocol
+      def iterm_display_image(path, cols: nil, rows: nil, preserve_aspect: true)
+        data    = File.binread(path)
         encoded = Base64.strict_encode64(data)
 
-        # Build arguments
-        args = []
-        args << "inline=1"
-        args << "width=#{width}" if width
-        args << "height=#{height}" if height
-        args << "preserveAspectRatio=#{preserve_aspect ? 1 : 0}"
+        args = ["inline=1", "size=#{data.bytesize}",
+                "preserveAspectRatio=#{preserve_aspect ? 1 : 0}"]
+        args << "width=#{cols}"   if cols
+        args << "height=#{rows}"  if rows
 
-        "#{ITERM_START}#{args.join(";")};#{encoded}#{ITERM_END}"
+        "#{ITERM_START}#{args.join(";")}:#{encoded}#{ITERM_END}"
       end
 
-      # ASCII art placeholder when graphics not supported
-      def ascii_placeholder(width, height)
-        top = "┌" + "─" * width + "┐\n"
-        middle = ("│" + " " * width + "│\n") * [height - 2, 1].max
-        bottom = "└" + "─" * width + "┘"
+      # ASCII box placeholder when no graphics protocol is available
+      def ascii_placeholder(cols, rows)
+        inner_w = [cols - 2, 1].max
+        top     = "┌" + "─" * inner_w + "┐\n"
+        middle  = ("│" + " " * inner_w + "│\n") * [rows - 2, 1].max
+        bottom  = "└" + "─" * inner_w + "┘"
         top + middle + bottom
       end
 
-      # Generate inline ASCII art animations
-      # These work in ALL terminals!
+      # Inline ASCII art animations — work in every terminal
       def ascii_art(name, frame = 0)
         case name
-        when :fire
-          fire_art(frame)
-        when :nyan
-          nyan_art(frame)
-        when :rocket
-          rocket_art(frame)
-        when :celebration
-          celebration_art(frame)
-        when :skull
-          skull_art(frame)
-        when :matrix
-          matrix_art(frame)
-        when :loading
-          loading_art(frame)
-        else
-          ""
+        when :fire        then fire_art(frame)
+        when :nyan        then nyan_art(frame)
+        when :rocket      then rocket_art(frame)
+        when :celebration then celebration_art(frame)
+        when :skull       then skull_art(frame)
+        when :matrix      then matrix_art(frame)
+        when :loading     then loading_art(frame)
+        else ""
         end
       end
 
       private
 
+      # Core Kitty encoder.  Produces correctly chunked APC sequences:
+      #   - first chunk carries all control keys
+      #   - subsequent chunks carry only m= (per the protocol spec)
+      # q=1: suppress OK responses, still surface errors.
+      def kitty_encode(data, format:, cols: nil, rows: nil,
+                        pixel_width: nil, pixel_height: nil, image_id: nil)
+        encoded = Base64.strict_encode64(data)
+        chunks  = encoded.scan(/.{1,#{KITTY_CHUNK_SIZE}}/)
+
+        result = "".b
+
+        chunks.each_with_index do |chunk, i|
+          is_last = (i == chunks.length - 1)
+
+          ctrl = if i == 0
+                   # First chunk: full control data
+                   parts = ["a=T", "f=#{format}", "t=d", "q=1"]
+                   parts << "s=#{pixel_width}"  if pixel_width
+                   parts << "v=#{pixel_height}" if pixel_height
+                   parts << "c=#{cols}"         if cols
+                   parts << "r=#{rows}"         if rows
+                   parts << "i=#{image_id}"     if image_id
+                   parts << "m=#{is_last ? 0 : 1}"
+                   parts.join(",")
+                 else
+                   # Subsequent chunks: only m= (and i= if needed for reassembly)
+                   parts = []
+                   parts << "i=#{image_id}" if image_id
+                   parts << "m=#{is_last ? 0 : 1}"
+                   parts.join(",")
+                 end
+
+          result << "#{KITTY_START}#{ctrl};#{chunk}#{KITTY_END}"
+        end
+
+        result.force_encoding(Encoding::BINARY)
+      end
+
+      # Linearly interpolate a palette array at position 0.0..1.0
+      def interpolate_palette(pal, pos)
+        return pal.first if pos <= 0.0
+        return pal.last  if pos >= 1.0
+
+        scaled = pos * (pal.length - 1)
+        idx    = scaled.floor
+        frac   = scaled - idx
+        c1     = pal[idx]
+        c2     = pal[[idx + 1, pal.length - 1].min]
+
+        [
+          (c1[0] + (c2[0] - c1[0]) * frac).round,
+          (c1[1] + (c2[1] - c1[1]) * frac).round,
+          (c1[2] + (c2[2] - c1[2]) * frac).round,
+        ]
+      end
+
       def fire_art(frame)
-        # Animated fire ASCII art
         flames = [
           "   (  )   ",
           "  (    )  ",
@@ -146,105 +228,53 @@ module ProgressBarNone
           "   \\||/   ",
           "    ||    ",
         ]
-
-        # Animate by shifting colors
         colors = [
-          "\e[38;2;255;0;0m",    # Red
-          "\e[38;2;255;100;0m",  # Orange
-          "\e[38;2;255;200;0m",  # Yellow
-          "\e[38;2;255;255;100m", # Light yellow
+          "\e[38;2;255;0;0m",
+          "\e[38;2;255;100;0m",
+          "\e[38;2;255;200;0m",
+          "\e[38;2;255;255;100m",
         ]
-
         result = ""
         flames.each_with_index do |line, i|
-          color_idx = (frame + i) % colors.length
-          result += "#{colors[color_idx]}#{line}\e[0m\n"
+          result += "#{colors[(frame + i) % colors.length]}#{line}\e[0m\n"
         end
         result
       end
 
       def nyan_art(frame)
-        # Animated nyan cat
         cat_frames = [
-          [
-            "   ╭━━━━━━━╮  ",
-            "  ╭┃ ▀ ω ▀ ┃╮ ",
-            "━━╯┃       ┃╰━",
-            "   ╰━━━╮╭━━╯  ",
-            "     ╰╯╰╯     ",
-          ],
-          [
-            "   ╭━━━━━━━╮  ",
-            "  ╭┃ ▀ ω ▀ ┃╮ ",
-            "━━╯┃       ┃╰━",
-            "   ╰━━╮━╮━━╯  ",
-            "     ╯  ╰     ",
-          ],
+          ["   ╭━━━━━━━╮  ", "  ╭┃ ▀ ω ▀ ┃╮ ", "━━╯┃       ┃╰━",
+           "   ╰━━━╮╭━━╯  ", "     ╰╯╰╯     "],
+          ["   ╭━━━━━━━╮  ", "  ╭┃ ▀ ω ▀ ┃╮ ", "━━╯┃       ┃╰━",
+           "   ╰━━╮━╮━━╯  ", "     ╯  ╰     "],
         ]
-
-        rainbow = "\e[38;2;255;0;0m━\e[38;2;255;127;0m━\e[38;2;255;255;0m━\e[38;2;0;255;0m━\e[38;2;0;0;255m━\e[38;2;139;0;255m━\e[0m"
-        cat = cat_frames[frame % 2]
-
+        rainbow = "\e[38;2;255;0;0m━\e[38;2;255;127;0m━\e[38;2;255;255;0m━" \
+                  "\e[38;2;0;255;0m━\e[38;2;0;0;255m━\e[38;2;139;0;255m━\e[0m"
         result = ""
-        cat.each { |line| result += "#{rainbow}#{line}\n" }
+        cat_frames[frame % 2].each { |line| result += "#{rainbow}#{line}\n" }
         result
       end
 
       def rocket_art(frame)
-        rockets = [
-          [
-            "    /\\    ",
-            "   /  \\   ",
-            "  |    |  ",
-            "  |    |  ",
-            " /|    |\\ ",
-            "/ |    | \\",
-            "  \\    /  ",
-            "   \\  /   ",
-            "    \\/    ",
-            "    ||    ",
-            "   /||\\   ",
-            "  / || \\  ",
-          ],
-          [
-            "    /\\    ",
-            "   /  \\   ",
-            "  |    |  ",
-            "  |    |  ",
-            " /|    |\\ ",
-            "/ |    | \\",
-            "  \\    /  ",
-            "   \\  /   ",
-            "    \\/    ",
-            "   *||*   ",
-            "  */||\\*  ",
-            " */ || \\* ",
-          ],
-        ]
-
+        body = ["    /\\    ", "   /  \\   ", "  |    |  ", "  |    |  ",
+                " /|    |\\ ", "/ |    | \\"]
+        exhaust = [["  \\    /  ", "   \\  /   ", "    \\/    ", "    ||    ",
+                    "   /||\\   ", "  / || \\  "],
+                   ["  \\    /  ", "   \\  /   ", "    \\/    ", "   *||*   ",
+                    "  */||\\*  ", " */ || \\* "]]
         colors = ["\e[38;2;255;100;0m", "\e[38;2;255;200;0m", "\e[38;2;255;255;255m"]
-        rocket = rockets[frame % 2]
-
         result = ""
-        rocket.each_with_index do |line, i|
-          color = i < 6 ? "\e[38;2;200;200;200m" : colors[(frame + i) % colors.length]
-          result += "#{color}#{line}\e[0m\n"
+        body.each { |l| result += "\e[38;2;200;200;200m#{l}\e[0m\n" }
+        exhaust[frame % 2].each_with_index do |l, i|
+          result += "#{colors[(frame + i) % colors.length]}#{l}\e[0m\n"
         end
         result
       end
 
       def celebration_art(frame)
-        # Fireworks/confetti
-        patterns = [
-          "  * . * . *  ",
-          " .  *   *  . ",
-          "*  .  *  .  *",
-          " . * . * . * ",
-          "  *   *   *  ",
-        ]
-
+        patterns = ["  * . * . *  ", " .  *   *  . ", "*  .  *  .  *",
+                    " . * . * . * ", "  *   *   *  "]
         emojis = ["🎉", "🎊", "✨", "💫", "⭐", "🌟"]
-
         result = ""
         patterns.each_with_index do |pattern, i|
           colored = pattern.gsub("*") do
@@ -257,39 +287,23 @@ module ProgressBarNone
       end
 
       def skull_art(frame)
-        skull = [
-          "     ___     ",
-          "    /   \\    ",
-          "   | x x |   ",
-          "   |  _  |   ",
-          "   | \\_/ |   ",
-          "    \\___/    ",
-        ]
-
-        eye_frames = ["x", "o", "O", "*"]
-        eye = eye_frames[frame % eye_frames.length]
-
+        skull = ["     ___     ", "    /   \\    ", "   | x x |   ",
+                 "   |  _  |   ", "   | \\_/ |   ", "    \\___/    "]
+        eye = ["x", "o", "O", "*"][frame % 4]
         result = ""
-        skull.each do |line|
-          colored_line = line.gsub("x", eye)
-          result += "\e[38;2;255;255;255m#{colored_line}\e[0m\n"
-        end
+        skull.each { |l| result += "\e[38;2;255;255;255m#{l.gsub("x", eye)}\e[0m\n" }
         result
       end
 
-      def matrix_art(frame)
-        width = 20
-        height = 5
+      def matrix_art(frame) # rubocop:disable Lint/UnusedMethodArgument
         chars = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789".chars
-
         result = ""
-        height.times do |y|
+        5.times do
           line = ""
-          width.times do |x|
+          20.times do
             if rand < 0.3
               brightness = rand(100..255)
-              char = chars.sample
-              line += "\e[38;2;0;#{brightness};0m#{char}\e[0m"
+              line += "\e[38;2;0;#{brightness};0m#{chars.sample}\e[0m"
             else
               line += " "
             end
@@ -300,14 +314,8 @@ module ProgressBarNone
       end
 
       def loading_art(frame)
-        frames = [
-          "[ ●    ]",
-          "[  ●   ]",
-          "[   ●  ]",
-          "[    ● ]",
-          "[   ●  ]",
-          "[  ●   ]",
-        ]
+        frames = ["[ ●    ]", "[  ●   ]", "[   ●  ]", "[    ● ]",
+                  "[   ●  ]", "[  ●   ]"]
         "\e[38;2;0;255;255m#{frames[frame % frames.length]}\e[0m"
       end
     end
