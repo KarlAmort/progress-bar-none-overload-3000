@@ -2,12 +2,13 @@
 
 Gem::Specification.new do |spec|
   spec.name          = "progress_bar_none_overload_3000"
-  spec.version       = "3000.0-alpha2"
+  spec.version       = "3000.0.1"
   spec.authors       = ["Karl Amort"]
   spec.email         = ["karl@amort.berlin"]
 
   spec.summary       = "Animated progress bars for Ruby CLI applications with 15+ palettes and 20+ styles"
   spec.description   = <<~DESC
+    Extremly vobecoded progres bar overkill. API-compatible with ruby-progressbar, but not taste-compatible with the npn-flamboyant.
     Animated progress bars for Ruby CLI applications. Features include 15+ color
     palettes, 20+ bar styles, 27 spinner animations, real-time metrics with
     sparklines, Gantt chart rendering, Kitty/iTerm2 inline graphics support,
